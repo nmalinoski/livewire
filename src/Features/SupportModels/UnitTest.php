@@ -130,7 +130,7 @@ class UnitTest extends \Tests\TestCase
             'post' => UnitTestPost::class,
         ]);
 
-        $component =  Livewire::test(UnitTestPostComponent::class);
+        $component =  Livewire::test(PostComponent::class);
 
         $this->assertEquals('post', $component->snapshot['data']['post'][1]['class']);
     }
