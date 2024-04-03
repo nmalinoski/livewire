@@ -2,16 +2,16 @@ Livewire provides a variety of lifecycle hooks that allow you to execute code at
 
 Here's a list of all the available component lifecycle hooks:
 
-| Hook Method        | Description                               |
-|-----------------|-------------------------------------------|
-| `mount()`    | Called when a component is created |
-| `hydrate()`    | Called when a component is re-hydrated at the beginning of a subsequent request |
-| `boot()`    | Called at the beginning of every request. Both initial, and subsequent |
-| `updating()`    | Called before updating a component property |
-| `updated()`    | Called after updating a property |
-| `rendering()`    | Called before `render()` is called |
-| `rendered()`    | Called after `render()` is called |
-| `dehydrate()`    | Called at the end of every component request |
+| Hook Method      | Description                                                                     |
+|------------------|---------------------------------------------------------------------------------|
+| `mount()`        | Called when a component is created                                              |
+| `hydrate()`      | Called when a component is re-hydrated at the beginning of a subsequent request |
+| `boot()`         | Called at the beginning of every request. Both initial, and subsequent          |
+| `updating()`     | Called before updating a component property                                     |
+| `updated()`      | Called after updating a property                                                |
+| `rendering()`    | Called before `render()` is called                                              |
+| `rendered()`     | Called after `render()` is called                                               |
+| `dehydrate()`    | Called at the end of every component request                                    |
 
 ## Mount
 
@@ -194,11 +194,34 @@ class CreateUser extends Component
 
 Of course, you can also apply this technique to the `updating` hook.
 
+### Arrays
+
+Array properties have an additional `$key` argument passed to these functions to specify the changing element.
+
+Note that when the array itself is updated instead of a specific key, the `$key` argument is null.
+
+```php
+use Livewire\Component;
+
+class UpdatePreferences extends Component
+{
+    public $preferences = [];
+
+    public function updatedPreferences($value, $key)
+    {
+        // $value = 'dark'
+        // $key   = 'theme'
+    }
+
+    // ...
+}
+```
+
 ## Hydrate & Dehydrate
 
 Hydrate and dehydrate are lesser-known and lesser-utilized hooks. However, there are specific scenarios where they can be powerful.
 
-The terms "dehydrate" and "hydrate" refer to a Livewire component being serialized to JSON for the client-side and then unserialized back into a PHP on the subsequent request.
+The terms "dehydrate" and "hydrate" refer to a Livewire component being serialized to JSON for the client-side and then unserialized back into a PHP object on the subsequent request.
 
 We often use the terms "hydrate" and "dehydrate" to refer to this process throughout Livewire's codebase and the documentation. If you'd like more clarity on these terms, you can learn more by [consulting our hydration documentation](/docs/hydration).
 

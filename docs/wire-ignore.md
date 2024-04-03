@@ -1,5 +1,5 @@
 
-Livewire's ability to make updates to the page is what makes it "live", however, there are times where you might want to prevent Livewire from updating a portion of the page.
+Livewire's ability to make updates to the page is what makes it "live", however, there are times when you might want to prevent Livewire from updating a portion of the page.
 
 In these cases, you can use the `wire:ignore` directive to instruct Livewire to ignore the contents of a particular element, even if they change between requests.
 
@@ -21,7 +21,7 @@ Below is an example of wrapping an element used by a third-party library in `wir
 </form>
 ```
 
-You can also instruct Livewire to only ignore changes to attributes of the root element rather than observing changes to it's contents using `wire:ignore.self`.
+You can also instruct Livewire to only ignore changes to attributes of the root element rather than observing changes to its contents using `wire:ignore.self`.
 
 ```blade
 <div wire:ignore.self>

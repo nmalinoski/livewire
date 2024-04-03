@@ -94,6 +94,29 @@ class ShowUsers extends Component
 }
 ```
 
+### Nullable properties
+
+By default, if a page is loaded with an empty query string entry like `?search=`, Livewire will treat that value as an empty string. In many cases, this is expected, however there are times when you want `?search=` to be treated as `null`.
+
+In these cases, you can use a nullable typehint like so:
+
+```php
+use Livewire\Attributes\Url;
+use Livewire\Component;
+
+class ShowUsers extends Component
+{
+    #[Url]
+    public ?string $search; // [tl! highlight]
+
+    // ...
+}
+```
+
+Because `?` is present in the above typehint, Livewire will see `?search=` and set `$search` to `null` instead of an empty string.
+
+This works the other way around as well, if you set `$this->search = null` in your application, it will be represented in the query string as `?search=`.
+
 ## Using an alias
 
 Livewire gives you full control over what name displays in the URL's query string. For example, you may have a `$search` property but want to either obfuscate the actual property name or shorten it to `q`.
@@ -119,7 +142,7 @@ Now, when a user types "bob" into the search field, the URL will show: `https://
 
 By default, Livewire will only put an entry in the query string when it's value has changed from what it was at initialization. Most of the time, this is the desired behavior, however, there are certain scenarios where you may want more control over which value Livewire excludes from the query string. In these cases you can use the `except` parameter.
 
-For example, in the component below, the inital value of `$search` is modified in `mount()`. To ensure the browser will only ever exclude `search` from the query string if the `search` value is an empty string, the `except` parameter has been added to `#[Url]`:
+For example, in the component below, the initial value of `$search` is modified in `mount()`. To ensure the browser will only ever exclude `search` from the query string if the `search` value is an empty string, the `except` parameter has been added to `#[Url]`:
 
 ```php
 use Livewire\Attributes\Url;
@@ -170,8 +193,8 @@ Because Livewire "replaces" the current history, pressing the "back" button in t
 To force Livewire to use `history.pushState` when updating the URL, you can provide the `history` parameter to the `#[Url]` attribute:
 
 ```php
+use Livewire\Attributes\Url;
 use Livewire\Component;
-use Livewire\With\Url;
 
 class ShowUsers extends Component
 {

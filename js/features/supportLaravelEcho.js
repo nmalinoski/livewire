@@ -1,5 +1,5 @@
-import { on } from '@/events'
-import { dispatchSelf } from './supportEvents'
+import { on } from '@/hooks'
+import { dispatchSelf } from '@/events'
 
 on('request', ({ options }) => {
     if (window.Echo) {
@@ -7,7 +7,7 @@ on('request', ({ options }) => {
     }
 })
 
-on('effects', (component, effects) => {
+on('effect', ({ component, effects }) => {
     let listeners = effects.listeners || []
 
     listeners.forEach(event => {
@@ -39,23 +39,35 @@ on('effects', (component, effects) => {
             ] = event_parts
 
             if (['channel', 'private', 'encryptedPrivate'].includes(channel_type)) {
-                window.Echo[channel_type](channel).listen(event_name, e => {
-                    dispatchSelf(component, event, [e])
+                let handler = e => dispatchSelf(component, event, [e])
+
+                window.Echo[channel_type](channel).listen(event_name, handler)
+
+                component.addCleanup(() => {
+                    window.Echo[channel_type](channel).stopListening(event_name, handler)
                 })
             } else if (channel_type == 'presence') {
                 if (['here', 'joining', 'leaving'].includes(event_name)) {
                     window.Echo.join(channel)[event_name](e => {
                         dispatchSelf(component, event, [e])
                     })
-                }else{
-                    window.Echo.join(channel).listen(event_name, e => {
-                        dispatchSelf(component, event, [e])
+
+                    // @todo: add listener cleanup...
+                } else{
+                    let handler = e => dispatchSelf(component, event, [e])
+
+                    window.Echo.join(channel).listen(event_name, handler)
+
+                    component.addCleanup(() => {
+                        window.Echo.leaveChannel(channel)
                     })
                 }
             } else if (channel_type == 'notification') {
                 window.Echo.private(channel).notification(notification => {
                     dispatchSelf(component, event, [notification])
                 })
+
+                // @todo: add listener cleanup...
             } else {
                 console.warn('Echo channel type not yet supported')
             }

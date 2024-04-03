@@ -1,5 +1,5 @@
 
-Loading indicators are an important part of crafting good user interfaces. They give users visual feedback when a request is being made to the server so they know they are waiting for a process to complete.
+Loading indicators are an important part of crafting good user interfaces. They give users visual feedback when a request is being made to the server, so they know they are waiting for a process to complete.
 
 ## Basic usage
 
@@ -91,6 +91,28 @@ By adding `wire:target` to the following `wire:loading` element, you can instruc
 
 When the above "Remove" button is pressed, the "Removing post..." message will be displayed to the user. However, the message will not be displayed when the "Save" button is pressed.
 
+### Targeting multiple actions
+
+You may find yourself in a situation where you would like `wire:loading` to react to some, but not all, actions on a page. In these cases you can pass multiple actions into `wire:target` separated by a comma. For example:
+
+```blade
+<form wire:submit="save">
+    <input type="text" wire:model.blur="title">
+
+    <!-- ... -->
+
+    <button type="submit">Save</button>
+
+    <button type="button" wire:click="remove">Remove</button>
+
+    <div wire:loading wire:target="save, remove">  <!-- [tl! highlight:2] -->
+        Updating post...
+    </div>
+</form>
+```
+
+The loading indicator ("Updating post...") will now only be shown when the "Remove" or "Save" button are pressed, and not when the `$title` field is being sent to the server.
+
 ### Targeting action parameters
 
 In situations where the same action is triggered with different parameters from multiple places on a page, you can further scope `wire:target` to a specific action by passing in additional parameters. For example, consider the following scenario where a "Remove" button exists for each post on the page:
@@ -115,6 +137,9 @@ Without passing `{{ $post->id }}` to `wire:target="remove"`, the "Removing post.
 
 However, because we are passing in unique parameters to each instance of `wire:target`, Livewire will only show the loading message when the matching parameters are passed to the "remove" action.
 
+> [!warning] Multiple action parameters aren't supported
+> At this time, Livewire only supports targeting a loading indicator by a single method/parameter pair. For example `wire:target="remove(1)"` is supported, however `wire:target="remove(1), add(1)"` is not.
+
 ### Targeting property updates
 
 Livewire also allows you to target specific component property updates by passing the property's name to the `wire:target` directive.
@@ -135,6 +160,16 @@ Consider the following example where a form input named `username` uses `wire:mo
 ```
 
 The "Checking availability..." message will show when the server is updated with the new username as the user types into the input field.
+
+### Excluding specific loading targets
+
+Sometimes you may wish to display a loading indicator for every Livewire request _except_ a specific property or action. In these cases you can use the `wire:target.except` modifier like so:
+
+```blade
+<div wire:loading wire:target.except="download">...</div>
+```
+
+The above loading indicator will now be shown for every Livewire update request on the component _except_ the "download" action.
 
 ## Customizing CSS display property
 

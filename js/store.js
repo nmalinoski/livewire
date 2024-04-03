@@ -1,6 +1,5 @@
 import { Component } from "@/component";
-import { trigger } from "@/events";
-import { deepClone } from "@/utils"
+import { trigger } from "@/hooks";
 
 let components = {}
 
@@ -75,5 +74,3 @@ export function first() {
 export function all() {
     return Object.values(components)
 }
-
-

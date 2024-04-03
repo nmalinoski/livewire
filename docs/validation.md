@@ -93,7 +93,7 @@ class CreatePost extends Component
 >
 > Learn more in the documentation on [using Laravel Rule objects with Livewire](#using-laravel-rule-objects).
 
-If you prefer more control over when the properties are validated, you can pass a `onUpdate: false` parameter to the `#[Validate]` attribute. This will disabled any automatic validation and instead assume you want to manually validate the properties using the `$this->validate()` method:
+If you prefer more control over when the properties are validated, you can pass a `onUpdate: false` parameter to the `#[Validate]` attribute. This will disable any automatic validation and instead assume you want to manually validate the properties using the `$this->validate()` method:
 
 ```php
 use Livewire\Attributes\Validate;
@@ -145,7 +145,7 @@ use Livewire\Attributes\Validate;
 public $title;
 ```
 
-Now, when the validation fails for this property, the message will  be "Please provide a post title" instead of "The title field is required".
+Now, when the validation fails for this property, the message will be "Please provide a post title" instead of "The title field is required".
 
 If you wish to add different messages for different rules, you can simply provide multiple `#[Validate]` attributes:
 
@@ -159,7 +159,7 @@ public $title;
 
 By default, Livewire rule messages and attributes are localized using Laravel's translate helper: `trans()`.
 
-You can opt-out of locaization by passing the `translate: false` parameter to the `#[Validate]` attribute:
+You can opt-out of localization by passing the `translate: false` parameter to the `#[Validate]` attribute:
 
 ```php
 #[Validate('required', message: 'Please provide a post title', translate: false)]
@@ -497,7 +497,7 @@ class UpdatePost extends Form
 
 ## Manually controlling validation errors
 
-Livewire's validation utilities should handle most common validation scenarios; however, there are times when you may want full control over the validation messages in your component.
+Livewire's validation utilities should handle the most common validation scenarios; however, there are times when you may want full control over the validation messages in your component.
 
 Below are all the available methods for manipulating the validation errors in your Livewire component:
 
@@ -650,4 +650,4 @@ For more information on other testing utilities provided by Livewire, check out 
 
 When Livewire v3 first launched, it used the term "Rule" instead of "Validate" for it's validation attributes (`#[Rule]`).
 
-Because of naming conflicts with Laravel rule objects, this has since been changed to `#[Validate]`. Both are supported in Livewire v3, however it is recommended that you change all occurances of `#[Rule]` with `#[Validate]` to stay current.
+Because of naming conflicts with Laravel rule objects, this has since been changed to `#[Validate]`. Both are supported in Livewire v3, however it is recommended that you change all occurrences of `#[Rule]` with `#[Validate]` to stay current.

@@ -1,5 +1,4 @@
-import Alpine from 'alpinejs'
-import { on } from './events'
+import { on } from './hooks'
 
 export function matchesForLivewireDirective(attributeName) {
     return attributeName.match(new RegExp('wire:'))

@@ -8,6 +8,7 @@ use Tests\TestCase;
 use Livewire\Livewire;
 use Livewire\Component;
 use Livewire\Attributes\Computed;
+use Livewire\Features\SupportEvents\BaseOn;
 
 class UnitTest extends TestCase
 {
@@ -172,6 +173,36 @@ class UnitTest extends TestCase
     }
 
     /** @test */
+    function can_tag_persisted_computed_with_custom_key_property()
+    {
+        Cache::setDefaultDriver('array');
+
+        Livewire::test(new class extends TestComponent {
+            public $count = 0;
+
+            #[Computed(persist: true, key: 'baz')]
+            function foo() {
+                $this->count++;
+
+                return 'bar';
+            }
+
+            function render() {
+                $noop = $this->foo;
+
+                return <<<'HTML'
+                    <div>foo{{ $this->foo }}</div>
+                HTML;
+            }
+        })
+            ->assertSee('foobar')
+            ->call('$refresh')
+            ->assertSet('count', 1);
+
+        $this->assertTrue(Cache::has('baz'));
+    }
+
+    /** @test */
     function cant_call_a_computed_directly()
     {
         $this->expectException(CannotCallComputedDirectlyException::class);
@@ -248,6 +279,75 @@ class UnitTest extends TestCase
     }
 
     /** @test */
+    function computed_property_is_accessible_using_snake_case()
+    {
+        Livewire::test(new class extends TestComponent {
+            public $upperCasedFoo = 'FOO_BAR';
+
+            #[Computed]
+            public function fooBar()
+            {
+                return strtolower($this->upperCasedFoo);
+            }
+
+            public function render()
+            {
+                return <<<'HTML'
+                <div>
+                    {{ var_dump($this->foo_bar) }}
+                </div>
+                HTML;
+            }
+        })
+            ->assertSee('foo_bar');
+    }
+
+    /** @test */
+    function computed_property_is_accessible_when_using_snake_case_or_camel_case_in_the_method_name_in_the_class()
+    {
+        Livewire::test(new class extends TestComponent {
+            public $upperCasedFoo = 'FOO_BAR';
+
+            #[Computed]
+            public function foo_bar_snake_case_in_component_class()
+            {
+                return strtolower($this->upperCasedFoo);
+            }
+
+            #[Computed]
+            public function fooBarCamelCaseInComponentClass()
+            {
+                return strtolower($this->upperCasedFoo);
+            }
+
+            public function render()
+            {
+                return <<<'HTML'
+                    <div>
+                        <!-- Snake Case in Component Class -->
+                        snake_case_in_component_class_{{ $this->foo_bar_snake_case_in_component_class }}
+
+                        <!-- Camel Case in Blade View -->
+                        camelCaseInBladeView_snake_case_method_{{ $this->fooBarCamelCaseInComponentClass }}
+
+                        <!-- Camel Case in Component Class -->
+                        camel_case_in_component_class_{{ $this->foo_bar_camel_case_in_component_class }}
+
+                        <!-- Camel Case in Blade View -->
+                        camelCaseInBladeView_camel_case_method_{{ $this->fooBarCamelCaseInComponentClass }}
+                    </div>
+                HTML;
+            }
+        })
+            ->assertSeeInOrder([
+                'snake_case_in_component_class_foo_bar',
+                'camelCaseInBladeView_snake_case_method_foo_bar',
+                'camel_case_in_component_class_foo_bar',
+                'camelCaseInBladeView_camel_case_method_foo_bar'
+            ]);
+    }
+
+    /** @test */
     public function computed_property_is_accessable_within_blade_view()
     {
         Livewire::test(ComputedPropertyStub::class)
@@ -287,6 +387,78 @@ class UnitTest extends TestCase
     {
         Livewire::test(NullIssetComputedPropertyStub::class)
             ->assertSee('false');
+    }
+
+    /** @test */
+    public function it_supports_legacy_computed_properties()
+    {
+        Livewire::test(new class extends TestComponent {
+            public function getFooProperty()
+            {
+                return 'bar';
+            }
+
+            public function render()
+            {
+                return '<div></div>';
+            }
+        })
+            ->assertSet('foo', 'bar');
+    }
+
+    /** @test */
+    public function it_supports_unsetting_legacy_computed_properties()
+    {
+        Livewire::test(new class extends TestComponent {
+            public $changeFoo = false;
+
+            public function getFooProperty()
+            {
+                return $this->changeFoo ? 'baz' : 'bar';
+            }
+
+            public function save()
+            {
+                // Access foo to ensure it is memoized.
+                $this->foo;
+
+                $this->changeFoo = true;
+
+                unset($this->foo);
+            }
+
+            public function render()
+            {
+                return '<div></div>';
+            }
+        })
+            ->assertSet('foo', 'bar')
+            ->call('save')
+            ->assertSet('foo', 'baz');
+    }
+
+    /** @test */
+    public function it_supports_unsetting_legacy_computed_properties_for_events()
+    {
+        Livewire::test(new class extends TestComponent {
+            public $changeFoo = false;
+
+            public function getFooProperty()
+            {
+                return $this->changeFoo ? 'baz' : 'bar';
+            }
+
+            #[BaseOn('bar')]
+            public function onBar()
+            {
+                $this->changeFoo = true;
+
+                unset($this->foo);
+            }
+        })
+            ->assertSet('foo', 'bar')
+            ->dispatch('bar', 'baz')
+            ->assertSet('foo', 'baz');
     }
 }
 

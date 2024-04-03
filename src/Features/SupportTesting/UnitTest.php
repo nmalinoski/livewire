@@ -2,6 +2,7 @@
 
 namespace Livewire\Features\SupportTesting;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use PHPUnit\Framework\ExpectationFailedException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
@@ -9,7 +10,7 @@ use Illuminate\Testing\TestResponse;
 use Illuminate\Testing\TestView;
 use Livewire\Component;
 use Livewire\Livewire;
-use Tests\TestCase;
+use Closure;
 
 // TODO - Change this to \Tests\TestCase
 class UnitTest extends \LegacyTests\Unit\TestCase
@@ -261,6 +262,16 @@ class UnitTest extends \LegacyTests\Unit\TestCase
     }
 
     /** @test */
+    function set_for_backed_enums()
+    {
+        Livewire::test(ComponentWithEnums::class)
+            ->set('backedFooBarEnum', BackedFooBarEnum::FOO->value)
+            ->assertSetStrict('backedFooBarEnum', BackedFooBarEnum::FOO)
+            ->set('backedFooBarEnum', BackedFooBarEnum::FOO)
+            ->assertSetStrict('backedFooBarEnum', BackedFooBarEnum::FOO);
+    }
+
+    /** @test */
     function assert_set()
     {
         $component = Livewire::test(HasMountArguments::class, ['name' => 'foo'])
@@ -298,6 +309,30 @@ class UnitTest extends \LegacyTests\Unit\TestCase
         $this->expectException(\PHPUnit\Framework\ExpectationFailedException::class);
 
         $component->assertNotSet('name', null);
+    }
+
+    /** @test */
+    function assert_set_strict()
+    {
+        $component = Livewire::test(HasMountArguments::class, ['name' => 'foo'])
+            ->set('name', '')
+            ->assertSetStrict('name', '');
+
+        $this->expectException(\PHPUnit\Framework\ExpectationFailedException::class);
+
+        $component->assertSetStrict('name', null);
+    }
+
+    /** @test */
+    function assert_not_set_strict()
+    {
+        $component = Livewire::test(HasMountArguments::class, ['name' => 'bar'])
+            ->set('name', '')
+            ->assertNotSetStrict('name', null);
+
+        $this->expectException(\PHPUnit\Framework\ExpectationFailedException::class);
+
+        $component->assertNotSetStrict('name', '');
     }
 
     /** @test */
@@ -441,6 +476,48 @@ class UnitTest extends \LegacyTests\Unit\TestCase
     }
 
     /** @test */
+    function assert_has_errors()
+    {
+        Livewire::test(ValidatesDataWithSubmitStub::class)
+            ->call('submit')
+            ->assertHasErrors()
+            ->assertHasErrors('foo')
+            ->assertHasErrors(['foo'])
+            ->assertHasErrors(['foo' => 'required'])
+            ->assertHasErrors(['foo' => 'The foo field is required.'])
+            ->assertHasErrors(['foo' => 'required', 'bar' => 'required'])
+            ->assertHasErrors(['foo' => 'The foo field is required.', 'bar' => 'The bar field is required.'])
+            ->assertHasErrors(['foo' => ['The foo field is required.'], 'bar' => ['The bar field is required.']])
+            ->assertHasErrors(['foo' => function ($rules, $messages) {
+                return in_array('required', $rules) && in_array('The foo field is required.', $messages);
+            }])
+        ;
+    }
+
+    /** @test */
+    function assert_has_errors_with_validation_class()
+    {
+        Livewire::test(ValidatesDataWithCustomRuleStub::class)
+            ->call('submit')
+            ->assertHasErrors()
+            ->assertHasErrors('foo')
+            ->assertHasErrors(['foo'])
+            ->assertHasErrors(['foo' => CustomValidationRule::class])
+            ->assertHasErrors(['foo' => 'My custom message'])
+            ->assertHasErrors(['foo' => function ($rules, $messages) {
+                return in_array(CustomValidationRule::class, $rules) && in_array('My custom message', $messages);
+            }])
+            ->set('foo', true)
+            ->call('submit')
+            ->assertHasNoErrors()
+            ->assertHasNoErrors('foo')
+            ->assertHasNoErrors(['foo'])
+            ->assertHasNoErrors(['foo' => CustomValidationRule::class])
+            ->assertHasNoErrors(['foo' => 'My custom message'])
+        ;
+    }
+
+    /** @test */
     function assert_has_error_with_manually_added_error()
     {
         Livewire::test(ValidatesDataWithSubmitStub::class)
@@ -501,6 +578,7 @@ class UnitTest extends \LegacyTests\Unit\TestCase
             ->assertReturned('bar')
             ->assertReturned(fn ($data) => $data === 'bar');
     }
+
     /** @test */
     public function can_set_cookies_for_use_with_testing()
     {
@@ -524,6 +602,54 @@ class UnitTest extends \LegacyTests\Unit\TestCase
             ->assertSet('colourCookie', 'blue')
             ->assertSet('nameCookie', 'Taylor')
             ;
+    }
+
+    /** @test */
+    public function can_set_headers_for_use_with_testing()
+    {
+        Livewire::withHeaders(['colour' => 'blue', 'name' => 'Taylor'])
+            ->test(new class extends Component {
+                public $colourHeader = '';
+                public $nameHeader = '';
+                public function mount()
+                {
+                    $this->colourHeader = request()->header('colour');
+                    $this->nameHeader = request()->header('name');
+                }
+
+                public function render()
+                {
+                    return '<div></div>';
+                }
+            })
+            ->assertSet('colourHeader', 'blue')
+            ->assertSet('nameHeader', 'Taylor')
+            ;
+    }
+
+    /** @test */
+    public function can_set_cookies_and_use_it_for_testing_subsequent_request()
+    {
+        // Test both the `withCookies` and `withCookie` methods that Laravel normally provides
+        Livewire::withCookies(['colour' => 'blue'])->withCookie('name', 'Taylor')
+            ->test(new class extends Component {
+                public $colourCookie = '';
+                public $nameCookie = '';
+
+                public function setTheCookies()
+                {
+                    $this->colourCookie = request()->cookie('colour');
+                    $this->nameCookie = request()->cookie('name');
+                }
+
+                public function render()
+                {
+                    return '<div></div>';
+                }
+            })
+            ->call('setTheCookies')
+            ->assertSet('colourCookie', 'blue')
+            ->assertSet('nameCookie', 'Taylor');
     }
 }
 
@@ -598,6 +724,33 @@ class DispatchesEventsComponentStub extends Component
     function dispatchFooToAComponentAsAModel()
     {
         $this->dispatch('foo')->to(ComponentWhichReceivesEvent::class);
+    }
+
+    function render()
+    {
+        return app('view')->make('null-view');
+    }
+}
+
+class CustomValidationRule implements ValidationRule
+{
+    public function validate(string $attribute, mixed $value, Closure $fail): void
+    {
+        if ($value === false) {
+            $fail('My custom message');
+        }
+    }
+}
+
+class ValidatesDataWithCustomRuleStub extends Component
+{
+    public bool $foo = false;
+
+    function submit()
+    {
+        $this->validate([
+            'foo' => new CustomValidationRule,
+        ]);
     }
 
     function render()
@@ -681,4 +834,20 @@ class ComponentWithMethodThatReturnsData extends Component
     {
         return app('view')->make('null-view');
     }
+}
+
+class ComponentWithEnums extends Component
+{
+    public BackedFooBarEnum $backedFooBarEnum;
+
+    function render()
+    {
+        return app('view')->make('null-view');
+    }
+}
+
+enum BackedFooBarEnum : string
+{
+    case FOO = 'foo';
+    case BAR = 'bar';
 }

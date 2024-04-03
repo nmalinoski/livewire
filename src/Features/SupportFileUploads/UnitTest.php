@@ -3,6 +3,8 @@
 namespace Livewire\Features\SupportFileUploads;
 
 use Carbon\Carbon;
+use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Support\Facades\Http;
 use Livewire\WithFileUploads;
 use Livewire\Livewire;
 use Livewire\Features\SupportDisablingBackButtonCache\SupportDisablingBackButtonCache;
@@ -130,6 +132,20 @@ class UnitTest extends \Tests\TestCase
             ->get('storedFilename');
 
         Storage::disk('avatars')->assertExists($storedFilename);
+    }
+
+    /** @test */
+    public function storing_a_file_uses_uploaded_file_hashname()
+    {
+        Storage::fake('avatars');
+
+        $file = UploadedFile::fake()->image('avatar.jpg');
+
+        Livewire::test(FileUploadComponent::class)
+            ->set('photo', $file)
+            ->call('uploadAndSetStoredFilename');
+
+        Storage::disk('avatars')->assertExists($file->hashName());
     }
 
     /** @test */
@@ -450,6 +466,64 @@ class UnitTest extends \Tests\TestCase
             ->viewData('photo');
 
         // Due to Livewire object still being in memory, we need to
+        // reset the "shouldDisableBackButtonCache" property back to its default
+        // which is false to ensure it's not applied to the below route
+        \Livewire\Features\SupportDisablingBackButtonCache\SupportDisablingBackButtonCache::$disableBackButtonCache = false;
+
+        ob_start();
+        $this->get($photo->temporaryUrl())->sendContent();
+        $rawFileContents = ob_get_clean();
+
+        $this->assertEquals($file->get(), $rawFileContents);
+
+        $this->assertTrue($photo->isPreviewable());
+    }
+
+    /** @test */
+    public function file_is_not_sent_on_cache_hit()
+    {
+        Storage::fake('avatars');
+
+        $file = UploadedFile::fake()->image('avatar.jpg');
+
+        $photo = Livewire::test(FileUploadComponent::class)
+            ->set('photo', $file)
+            ->viewData('photo');
+
+        ob_start();
+        $response = $this->get($photo->temporaryUrl());
+        $response->sendContent();
+        $rawFileContents = ob_get_clean();
+        $this->assertEquals($file->get(), $rawFileContents);
+
+        ob_start();
+        $cachedResponse = $this->get($photo->temporaryUrl(), [
+            'If-Modified-Since' => $response->headers->get('last-modified'),
+        ]);
+        $cachedResponse->sendContent();
+        $this->assertEquals(304, $cachedResponse->getStatusCode());
+        $cachedFileContents = ob_get_clean();
+
+        $this->assertEquals('', $cachedFileContents);
+    }
+
+    /** @test */
+    public function can_preview_a_temporary_file_on_a_remote_storage()
+    {
+        $disk = Storage::fake('tmp-for-tests');
+
+        // A remote storage will always return the short path when calling $disk->path(). To simulate a remote
+        // storage, the fake storage will be recreated with an empty prefix option in order to get the short path even
+        // if it's a local filesystem.
+        Storage::set('tmp-for-tests', new FilesystemAdapter($disk->getDriver(), $disk->getAdapter(), ['prefix' => '']));
+
+        $file = UploadedFile::fake()->image('avatar.jpg');
+
+        $photo = Livewire::test(FileUploadComponent::class)
+            ->set('photo', $file)
+            ->viewData('photo');
+
+        // Due to Livewire object still being in memory, we need to
         // reset the "shouldDisableBackButtonCache" property back to it's default
         // which is false to ensure it's not applied to the below route
         \Livewire\Features\SupportDisablingBackButtonCache\SupportDisablingBackButtonCache::$disableBackButtonCache = false;
@@ -474,6 +548,7 @@ class UnitTest extends \Tests\TestCase
             ->set('photo', $file)
             ->viewData('photo');
 
+        $this->expectException(FileNotPreviewableException::class);
         $photo->temporaryUrl();
 
         $this->assertFalse($photo->isPreviewable());
@@ -697,6 +772,18 @@ class UnitTest extends \Tests\TestCase
 
         $this->assertEquals($first_url, $second_url);
     }
+
+    /** @test */
+    public function file_content_can_be_retrieved_from_temporary_uploaded_files()
+    {
+        Storage::fake('avatars');
+
+        $file = UploadedFile::fake()->image('avatar.jpg');
+
+        Livewire::test(FileReadContentComponent::class)
+            ->set('file', $file)
+            ->assertSet('content', $file->getContent());
+    }
 }
 
 class DummyMiddleware
@@ -805,6 +892,19 @@ class FileUploadInArrayComponent extends FileUploadComponent
 
     public function removePhoto($key) {
         unset($this->obj['file_uploads'][$key]);
+    }
+}
+
+class FileReadContentComponent extends FileUploadComponent
+{
+    use WithFileUploads;
+
+    public $file;
+    public $content = '';
+
+    public function updatedFile()
+    {
+        $this->content = $this->file->getContent();
     }
 }
 

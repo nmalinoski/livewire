@@ -1,13 +1,12 @@
-import { updateCurrentPageHtmlInHistoryStateForLaterBackButtonClicks, updateUrlAndStoreLatestHtmlForFutureBackButtons, whenTheBackOrForwardButtonIsClicked } from "./history"
+import { replaceUrl, updateCurrentPageHtmlInHistoryStateForLaterBackButtonClicks, updateCurrentPageHtmlInSnapshotCacheForLaterBackButtonClicks, updateUrlAndStoreLatestHtmlForFutureBackButtons, whenTheBackOrForwardButtonIsClicked } from "./history"
 import { getPretchedHtmlOr, prefetchHtml, storeThePrefetchedHtmlForWhenALinkIsClicked } from "./prefetch"
 import { createUrlObjectFromString, extractDestinationFromLink, whenThisLinkIsHoveredFor, whenThisLinkIsPressed } from "./links"
-import { packUpPersistedTeleports, removeAnyLeftOverStaleTeleportTargets, unPackPersistedTeleports } from "./teleport"
+import { isTeleportTarget, packUpPersistedTeleports, removeAnyLeftOverStaleTeleportTargets, unPackPersistedTeleports } from "./teleport"
 import { restoreScrollPositionOrScrollToTop, storeScrollInformationInHtmlBeforeNavigatingAway } from "./scroll"
-import { putPersistantElementsBack, storePersistantElementsForLater } from "./persist"
+import { isPersistedElement, putPersistantElementsBack, storePersistantElementsForLater } from "./persist"
 import { finishAndHideProgressBar, showAndStartProgressBar } from "./bar"
 import { swapCurrentPageWithNewHtml } from "./page"
 import { fetchHtml } from "./fetch"
-import Alpine from "alpinejs"
 
 let enablePersist = true
 let showProgressBar = true
@@ -15,10 +14,17 @@ let restoreScroll = true
 let autofocus = false
 
 export default function (Alpine) {
+
     Alpine.navigate = (url) => {
-        navigateTo(
-            createUrlObjectFromString(url)
-        )
+        let destination = createUrlObjectFromString(url)
+
+        let prevented = fireEventForOtherLibariesToHookInto('alpine:navigate', {
+            url: destination, history: false, cached: false,
+         })
+
+        if (prevented) return
+
+        navigateTo(destination)
     }
 
     Alpine.navigate.disableProgressBar = () => {
@@ -27,41 +33,121 @@ export default function (Alpine) {
 
     Alpine.addInitSelector(() => `[${Alpine.prefixed('navigate')}]`)
 
-    Alpine.directive('navigate', (el, { value, expression, modifiers }, { evaluateLater, cleanup }) => {
+    Alpine.directive('navigate', (el, { modifiers }) => {
         let shouldPrefetchOnHover = modifiers.includes('hover')
 
         shouldPrefetchOnHover && whenThisLinkIsHoveredFor(el, 60, () => {
             let destination = extractDestinationFromLink(el)
 
-            prefetchHtml(destination, html => {
-                storeThePrefetchedHtmlForWhenALinkIsClicked(html, destination)
+            prefetchHtml(destination, (html, finalDestination) => {
+                storeThePrefetchedHtmlForWhenALinkIsClicked(html, destination, finalDestination)
             })
         })
 
         whenThisLinkIsPressed(el, (whenItIsReleased) => {
             let destination = extractDestinationFromLink(el)
 
-            prefetchHtml(destination, html => {
-                storeThePrefetchedHtmlForWhenALinkIsClicked(html, destination)
+            prefetchHtml(destination, (html, finalDestination) => {
+                storeThePrefetchedHtmlForWhenALinkIsClicked(html, destination, finalDestination)
             })
 
             whenItIsReleased(() => {
-                navigateTo(destination)
+                let prevented = fireEventForOtherLibariesToHookInto('alpine:navigate', {
+                    url: destination, history: false, cached: false,
+                 })
+
+                if (prevented) return
+
+                navigateTo(destination);
             })
         })
     })
 
-    function navigateTo(destination) {
+    function navigateTo(destination, shouldPushToHistoryState = true) {
         showProgressBar && showAndStartProgressBar()
 
-        fetchHtmlOrUsePrefetchedHtml(destination, html => {
+        fetchHtmlOrUsePrefetchedHtml(destination, (html, finalDestination) => {
             fireEventForOtherLibariesToHookInto('alpine:navigating')
 
             restoreScroll && storeScrollInformationInHtmlBeforeNavigatingAway()
 
             showProgressBar && finishAndHideProgressBar()
 
+            cleanupAlpineElementsOnThePageThatArentInsideAPersistedElement()
+
             updateCurrentPageHtmlInHistoryStateForLaterBackButtonClicks()
+
+            preventAlpineFromPickingUpDomChanges(Alpine, andAfterAllThis => {
+                enablePersist && storePersistantElementsForLater(persistedEl => {
+                    packUpPersistedTeleports(persistedEl)
+                })
+
+                if (shouldPushToHistoryState) {
+                    updateUrlAndStoreLatestHtmlForFutureBackButtons(html, finalDestination)
+                } else {
+                    replaceUrl(finalDestination, html)
+                }
+
+                swapCurrentPageWithNewHtml(html, (afterNewScriptsAreDoneLoading) => {
+                    removeAnyLeftOverStaleTeleportTargets(document.body)
+
+                    enablePersist && putPersistantElementsBack((persistedEl, newStub) => {
+                        unPackPersistedTeleports(persistedEl)
+                    })
+
+                    restoreScrollPositionOrScrollToTop()
+
+                    afterNewScriptsAreDoneLoading(() => {
+                        andAfterAllThis(() => {
+                            setTimeout(() => {
+                                autofocus && autofocusElementsWithTheAutofocusAttribute()
+                            })
+
+                            nowInitializeAlpineOnTheNewPage(Alpine)
+
+                            fireEventForOtherLibariesToHookInto('alpine:navigated')
+                        })
+                    })
+                })
+            })
+        })
+    }
+
+    whenTheBackOrForwardButtonIsClicked(
+        (ifThePageBeingVisitedHasntBeenCached) => {
+            ifThePageBeingVisitedHasntBeenCached((url) => {
+                let destination = createUrlObjectFromString(url)
+
+                let prevented = fireEventForOtherLibariesToHookInto('alpine:navigate', {
+                    url: destination, history: true, cached: false,
+                 })
+
+                if (prevented) return
+
+                let shouldPushToHistoryState = false
+
+                navigateTo(destination, shouldPushToHistoryState)
+            })
+        },
+        (html, url, currentPageUrl, currentPageKey) => {
+            let destination = createUrlObjectFromString(url)
+
+            let prevented = fireEventForOtherLibariesToHookInto('alpine:navigate', {
+                url: destination, history: true, cached: true,
+            })
+
+            if (prevented) return
+
+            // @todo: see if there's a way to update the current HTML BEFORE
+            // the back button is hit, and not AFTER:
+            storeScrollInformationInHtmlBeforeNavigatingAway()
+
+            // This ensures the current HTML has the latest snapshot
+            fireEventForOtherLibariesToHookInto('alpine:navigating')
+
+            // Only update the snapshot and not the history state as the history state
+            // has already changed to the new page due to the popstate event
+            updateCurrentPageHtmlInSnapshotCacheForLaterBackButtonClicks(currentPageUrl, currentPageKey)
 
             preventAlpineFromPickingUpDomChanges(Alpine, andAfterAllThis => {
                 enablePersist && storePersistantElementsForLater(persistedEl => {
@@ -77,51 +163,17 @@ export default function (Alpine) {
 
                     restoreScrollPositionOrScrollToTop()
 
-                    fireEventForOtherLibariesToHookInto('alpine:navigated')
-
-                    updateUrlAndStoreLatestHtmlForFutureBackButtons(html, destination)
-
                     andAfterAllThis(() => {
                         autofocus && autofocusElementsWithTheAutofocusAttribute()
 
                         nowInitializeAlpineOnTheNewPage(Alpine)
+
+                        fireEventForOtherLibariesToHookInto('alpine:navigated')
                     })
                 })
             })
-        })
-    }
-
-    whenTheBackOrForwardButtonIsClicked((html) => {
-        // @todo: see if there's a way to update the current HTML BEFORE
-        // the back button is hit, and not AFTER:
-        storeScrollInformationInHtmlBeforeNavigatingAway()
-        // updateCurrentPageHtmlInHistoryStateForLaterBackButtonClicks()
-
-        preventAlpineFromPickingUpDomChanges(Alpine, andAfterAllThis => {
-            enablePersist && storePersistantElementsForLater(persistedEl => {
-                packUpPersistedTeleports(persistedEl)
-            })
-
-            swapCurrentPageWithNewHtml(html, () => {
-                removeAnyLeftOverStaleTeleportTargets(document.body)
-
-                enablePersist && putPersistantElementsBack((persistedEl, newStub) => {
-                    unPackPersistedTeleports(persistedEl)
-                })
-
-                restoreScrollPositionOrScrollToTop()
-
-                fireEventForOtherLibariesToHookInto('alpine:navigated')
-
-                andAfterAllThis(() => {
-                    autofocus && autofocusElementsWithTheAutofocusAttribute()
-
-                    nowInitializeAlpineOnTheNewPage(Alpine)
-                })
-            })
-
-        })
-    })
+        },
+    )
 
     // Because DOMContentLoaded is fired on first load,
     // we should fire alpine:navigated as a replacement as well...
@@ -142,14 +194,22 @@ function preventAlpineFromPickingUpDomChanges(Alpine, callback) {
     callback((afterAllThis) => {
         Alpine.startObservingMutations()
 
-        setTimeout(() => {
+        queueMicrotask(() => {
             afterAllThis()
         })
     })
 }
 
-function fireEventForOtherLibariesToHookInto(eventName) {
-    document.dispatchEvent(new CustomEvent(eventName, { bubbles: true }))
+function fireEventForOtherLibariesToHookInto(name, detail) {
+    let event = new CustomEvent(name, {
+        cancelable: true,
+        bubbles: true,
+        detail,
+    })
+
+    document.dispatchEvent(event)
+
+    return event.defaultPrevented
 }
 
 function nowInitializeAlpineOnTheNewPage(Alpine) {
@@ -160,4 +220,20 @@ function nowInitializeAlpineOnTheNewPage(Alpine) {
 
 function autofocusElementsWithTheAutofocusAttribute() {
     document.querySelector('[autofocus]') && document.querySelector('[autofocus]').focus()
+}
+
+function cleanupAlpineElementsOnThePageThatArentInsideAPersistedElement() {
+    // Create a new tree walker that skips persisted elements...
+    let walker = function (root, callback) {
+        Alpine.walk(root, (el, skip) => {
+            if (isPersistedElement(el)) skip()
+            if (isTeleportTarget(el)) skip()
+            else callback(el, skip)
+        })
+    }
+
+    // Set Alpine in motion to destroy itself on the page. If this proves
+    // to be a performance issue at some point (walking the DOM tree),
+    // we can be more surgical about cleaning up x-for/if instead...
+    Alpine.destroyTree(document.body, walker)
 }

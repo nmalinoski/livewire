@@ -1,11 +1,10 @@
-import { dispatch, dispatchSelf, dispatchTo, listen } from '@/features/supportEvents'
+import { cancelUpload, removeUpload, upload, uploadMultiple } from './features/supportFileUploads'
+import { dispatch, dispatchSelf, dispatchTo, listen } from '@/events'
 import { generateEntangleFunction } from '@/features/supportEntangle'
-import { closestComponent, findComponent } from '@/store'
-import { requestCommit, requestCall } from '@/commit'
-import { WeakBag, dataGet, dataSet } from '@/utils'
-import { on, trigger } from '@/events'
+import { closestComponent } from '@/store'
+import { requestCommit, requestCall } from '@/request'
+import { dataGet, dataSet } from '@/utils'
 import Alpine from 'alpinejs'
-import { removeUpload, upload, uploadMultiple } from './features/supportFileUploads'
 
 let properties = {}
 let fallback
@@ -36,6 +35,7 @@ let aliases = {
     'upload': '$upload',
     'uploadMultiple': '$uploadMultiple',
     'removeUpload': '$removeUpload',
+    'cancelUpload': '$cancelUpload',
 }
 
 export function generateWireObject(component, state) {
@@ -116,9 +116,15 @@ wireProperty('$id', (component) => {
 wireProperty('$set', (component) => async (property, value, live = true) => {
     dataSet(component.reactive, property, value)
 
-    return live
-        ? await requestCommit(component)
-        : Promise.resolve()
+    // If "live", send a request, queueing the property update to happen first
+    // on the server, then trickle back down to the client and get merged...
+    if (live) {
+        component.queueUpdate(property, value)
+
+        return await requestCommit(component)
+    }
+
+    return Promise.resolve()
 })
 
 wireProperty('$call', (component) => async (method, ...params) => {
@@ -134,28 +140,13 @@ wireProperty('$toggle', (component) => (name, live = true) => {
 })
 
 wireProperty('$watch', (component) => (path, callback) => {
-    let firstTime = true
-    let oldValue = undefined
+    let getter = () => {
+        return dataGet(component.reactive, path)
+    }
 
-   Alpine.effect(() => {
-    // JSON.stringify touches every single property at any level enabling deep watching
-        let value = dataGet(component.reactive, path)
-        JSON.stringify(value)
+    let unwatch = Alpine.watch(getter, callback)
 
-        if (! firstTime) {
-            // We have to queue this watcher as a microtask so that
-            // the watcher doesn't pick up its own dependencies.
-            queueMicrotask(() => {
-                callback(value, oldValue)
-
-                oldValue = value
-            })
-        } else {
-            oldValue = value
-        }
-
-        firstTime = false
-    })
+    component.addCleanup(unwatch)
 })
 
 wireProperty('$refresh', (component) => component.$wire.$commit)
@@ -165,11 +156,11 @@ wireProperty('$on', (component) => (...params) => listen(component, ...params))
 
 wireProperty('$dispatch', (component) => (...params) => dispatch(component, ...params))
 wireProperty('$dispatchSelf', (component) => (...params) => dispatchSelf(component, ...params))
-wireProperty('$dispatchTo', (component) => (...params) => dispatchTo(component, ...params))
-
+wireProperty('$dispatchTo', () => (...params) => dispatchTo(...params))
 wireProperty('$upload', (component) => (...params) => upload(component, ...params))
 wireProperty('$uploadMultiple', (component) => (...params) => uploadMultiple(component, ...params))
 wireProperty('$removeUpload', (component) => (...params) => removeUpload(component, ...params))
+wireProperty('$cancelUpload', (component) => (...params) => cancelUpload(component, ...params))
 
 let parentMemo = new WeakMap
 

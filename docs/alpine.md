@@ -1,5 +1,5 @@
 
-[AlpineJS](https://alpinejs.dev/) is a lightweight JavaScript library that makes it easy to add client-side interactivity to your web pages. It was originally built to compliment tools like Livewire where a more JavaScript-centric utility is helpful for sprinkling interactivity around your app.
+[AlpineJS](https://alpinejs.dev/) is a lightweight JavaScript library that makes it easy to add client-side interactivity to your web pages. It was originally built to complement tools like Livewire where a more JavaScript-centric utility is helpful for sprinkling interactivity around your app.
 
 Livewire ships with Alpine out of the box so there is no need to install it into your project separately.
 
@@ -24,7 +24,7 @@ The Alpine component above can be used inside any Livewire component in your app
 
 ## Using Alpine inside Livewire
 
-Let's explore a more real-life example of using a Alpine inside a Livewire component.
+Let's explore a more real-life example of using an Alpine component inside a Livewire component.
 
 Below is a simple Livewire component showing the details of a post model from the database. By default, only the title of the post is shown:
 
@@ -73,7 +73,7 @@ Here is an example of a simple "character count" utility in a form for creating 
 </form>
 ```
 
-As you can see `x-text` in the above example is being used to allow Alpine to control the text content of the `<span>` element. `x-text` accepts any JavaScript expression inside of it and automatically reacts when any dependancies are updated. Because we are using `$wire.content` to access the value of `$content`, Alpine will automatically update the text content every time `$wire.content` is updated from Livewire; in this case by `wire:model="content"`.
+As you can see `x-text` in the above example is being used to allow Alpine to control the text content of the `<span>` element. `x-text` accepts any JavaScript expression inside of it and automatically reacts when any dependencies are updated. Because we are using `$wire.content` to access the value of `$content`, Alpine will automatically update the text content every time `$wire.content` is updated from Livewire; in this case by `wire:model="content"`.
 
 ### Mutating Livewire properties
 
@@ -106,7 +106,7 @@ Here's a brief explanation of what's going on to make that happen:
 
 Alpine can also easily call any Livewire methods/actions by simply calling them directly on `$wire`.
 
-Here is an example of using Alpine to listen for a "blur" event on an input and triggering a form save. The "blur" event is dispatched by the browser when a user presses "tab" to remove focus from the current elemement and focus on the next one on the page:
+Here is an example of using Alpine to listen for a "blur" event on an input and triggering a form save. The "blur" event is dispatched by the browser when a user presses "tab" to remove focus from the current element and focus on the next one on the page:
 
 ```html
 <form wire:submit="save">
@@ -118,11 +118,11 @@ Here is an example of using Alpine to listen for a "blur" event on an input and 
 </form>
 ```
 
-Typically you would just use `wire:model.blur="title"` in this situation, however, it's helpful for demonstration purposes how you can achieve this using Alpine.
+Typically, you would just use `wire:model.blur="title"` in this situation, however, it's helpful for demonstration purposes how you can achieve this using Alpine.
 
 #### Passing parameters
 
-You can also pass parameters to Livewire methods by simply passing the to the `$wire` method call.
+You can also pass parameters to Livewire methods by simply passing them to the `$wire` method call.
 
 Consider a component with a `deletePost()` method like so:
 
@@ -227,6 +227,64 @@ You can easily refresh a Livewire component (trigger network roundtrip to re-ren
 ```html
 <button type="button" x-on:click="$wire.$refresh()">
 ```
+
+## Sharing state using `$wire.entangle`
+
+In most cases, `$wire` is all you need for interacting with Livewire state from Alpine. However, Livewire provides an additional `$wire.entangle()` utility that can be used to keep values from Livewire in-sync with values in Alpine.
+
+To demonstrate, consider this dropdown example with its `showDropdown` property entangled between Livewire and Alpine using `$wire.entangle()`. By using entanglement, we are now able to control the state of the dropdown from both Alpine and Livewire:
+
+
+```php
+use Livewire\Component;
+
+class PostDropdown extends Component
+{
+    public $showDropdown = false;
+
+    public function archive()
+    {
+        // ...
+
+        $this->showDropdown = false;
+    }
+
+    public function delete()
+    {
+        // ...
+
+        $this->showDropdown = false;
+    }
+}
+```
+
+```blade
+<div x-data="{ open: $wire.entangle('showDropdown') }">
+    <button x-on:click="open = true">Show More...</button>
+
+    <ul x-show="open" x-on:click.outside="open = false">
+        <li><button wire:click="archive">Archive</button></li>
+
+        <li><button wire:click="delete">Delete</button></li>
+    </ul>
+</div>
+```
+
+A user can now toggle the dropdown immediately with Alpine, but when they click a Livewire action like "Archive", the dropdown will be told to close from Livewire. Both Alpine and Livewire are welcome to manipulate their respective properties, and the other will automatically update.
+
+By default, updating the state is deferred (changes on the client, but not immediately on the server) until the next Livewire request. If you need to update the state server-side as soon as the user clicks, chain the `.live` modifier like so:
+
+```blade
+<div x-data="{ open: $wire.entangle('showDropdown').live }">
+    ...
+</div>
+```
+
+> [!tip] You might not need `$wire.entangle`
+> In most cases, you can achieve what you want by using `$wire` to directly access Livewire properties from Alpine rather than entangling them. Entangling two properties rather than relying on one can cause predictability and performance issues when using deeply nested objects that change frequently. For this reason, `$wire.entangle` has been de-emphasized in Livewire's documentation starting with version 3.
+
+> [!warning] Refrain from using the @@entangle directive
+> In Livewire version 2, it was recommended to use Blade's `@@entangle` directive. That is no longer the case in v3. `$wire.entangle()` is preferred as it is a more robust utility and avoids certain [issues when removing DOM elements](https://github.com/livewire/livewire/pull/6833#issuecomment-1902260844).
 
 ## Manually bundling Alpine in your JavaScript build
 

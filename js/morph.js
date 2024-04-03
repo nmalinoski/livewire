@@ -1,4 +1,4 @@
-import { trigger } from "@/events"
+import { trigger } from "@/hooks"
 import { closestComponent } from "@/store"
 import Alpine from 'alpinejs'
 
@@ -43,7 +43,7 @@ export function morph(component, el, html) {
             if (isComponentRootEl(el)) toEl.__livewire = component
         },
 
-        updated: (el, toEl) => {
+        updated: (el) => {
             if (isntElement(el)) return
 
             trigger('morph.updated', { el, component })

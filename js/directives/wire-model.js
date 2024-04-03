@@ -1,5 +1,4 @@
 import { directive } from '@/directives'
-import { on } from '@/events'
 import { handleFileUpload } from '@/features/supportFileUploads'
 import { closestComponent } from '@/store'
 import { dataGet, dataSet } from '@/utils'

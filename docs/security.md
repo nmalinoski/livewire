@@ -36,7 +36,7 @@ class ShowPost extends Component
 
 The reason the above example is insecure is that `wire:click="delete(...)"` can be modified in the browser to pass ANY post ID a malicious user wishes.
 
-Action paramaters (like `$id` in this case) should be treated the same as any untrusted input from the browser.
+Action parameters (like `$id` in this case) should be treated the same as any untrusted input from the browser.
 
 Therefore, to keep this application secure and prevent a user from deleting another user's post, we must add authorization to the `delete()` action.
 
@@ -73,11 +73,11 @@ Now, we can use the `$this->authorize()` method from the Livewire component to e
 ```php
 public function delete($id)
 {
+    $post = Post::find($id);
+
     // If the user doesn't own the post,
     // an AuthorizationException will be thrown...
     $this->authorize('delete', $post); // [tl! highlight]
-
-    $post = Post::find($id);
 
     $post->delete();
 }
@@ -169,6 +169,37 @@ class ShowPost extends Component
 
 This component is now secured because there is no way for a malicious user to change the `$post` property to a different Eloquent model.
 
+### Locking the property
+Another way to prevent properties from being set to unwanted values is to use [locked properties](https://livewire.laravel.com/docs/locked). Locking properties is done by applying the `#[Locked]` attribute. Now if users attempt to tamper with this value an error will be thrown.
+
+Note that properties with the Locked attribute can still be changed in the back-end, so care still needs to taken that untrusted user input is not passed to the property in your own Livewire functions.
+
+```php
+<?php
+
+use App\Models\Post;
+use Livewire\Component;
+use Livewire\Attributes\Locked;
+
+class ShowPost extends Component
+{
+    #[Locked] // [tl! highlight]
+    public $postId;
+
+    public function mount($postId)
+    {
+        $this->postId = $postId;
+    }
+
+    public function delete()
+    {
+        $post = Post::find($this->postId);
+
+        $post->delete();
+    }
+}
+```
+
 ### Authorizing the property
 
 If using a model property is undesired in your scenario, you can of course fall-back to manually authorizing the deletion of the post inside the `delete` action:
@@ -188,14 +219,14 @@ class ShowPost extends Component
         $this->postId = $postId;
     }
 
-public function delete()
-{
-    $post = Post::find($this->postId);
+    public function delete()
+    {
+        $post = Post::find($this->postId);
 
-    $this->authorize('delete', $post); // [tl! highlight]
+        $this->authorize('delete', $post); // [tl! highlight]
 
-    $post->delete();
-}
+        $post->delete();
+    }
 }
 ```
 
@@ -214,7 +245,7 @@ Further reading:
 When a Livewire component is loaded on a page containing route-level [Authorization Middleware](https://laravel.com/docs/authorization#via-middleware), like so:
 
 ```php
-Route::put('/post/{post}', App\Livewire\UpdatePost::class)
+Route::get('/post/{post}', App\Livewire\UpdatePost::class)
     ->middleware('can:update,post'); // [tl! highlight]
 ```
 
@@ -225,7 +256,7 @@ Persistent middleware protects you from scenarios where the authorization rules 
 Here's a more in-depth example of such a scenario:
 
 ```php
-Route::put('/post/{post}', App\Livewire\UpdatePost::class)
+Route::get('/post/{post}', App\Livewire\UpdatePost::class)
     ->middleware('can:update,post'); // [tl! highlight]
 ```
 
@@ -274,7 +305,7 @@ Because Livewire has internal mechanisms to re-apply middleware from the origina
 
 ### Configuring persistent middleware
 
-By default Livewire persists the following middleware across network requests:
+By default, Livewire persists the following middleware across network requests:
 
 ```php
 \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
@@ -284,7 +315,6 @@ By default Livewire persists the following middleware across network requests:
 \App\Http\Middleware\RedirectIfAuthenticated::class,
 \Illuminate\Auth\Middleware\Authenticate::class,
 \Illuminate\Auth\Middleware\Authorize::class,
-\App\Http\Middleware\Authenticate::class,
 ```
 
 If any of the above middlewares are applied to the initial page-load, they will be persisted (re-applied) to any future network requests.
@@ -315,6 +345,18 @@ class AppServiceProvider extends ServiceProvider
 
 If a Livewire component is loaded on a page that uses the `EnsureUserHasRole` middleware from your application, it will now be persisted and re-applied to any future network requests to that Livewire component.
 
+> [!warning] Middleware arguments are not supported
+> Livewire currently doesn't support middleware arguments for persistent middleware definitions.
+>
+> ```php
+> // Bad...
+> Livewire::addPersistentMiddleware(AuthorizeResource::class.':admin');
+>
+> // Good...
+> Livewire::addPersistentMiddleware(AuthorizeResource::class);
+> ```
+
+
 ### Applying global Livewire middleware
 
 Alternatively, if you wish to apply specific middleware to every single Livewire update network request, you can do so by registering your own Livewire update route with any middleware you wish:
@@ -326,13 +368,13 @@ Livewire::setUpdateRoute(function ($handle) {
 });
 ```
 
-Any Livewire AJAX/fetch requests made to the server will use the above endpoint and apply the `LocalizeViewPaths` middleware before handling the component udpdate.
+Any Livewire AJAX/fetch requests made to the server will use the above endpoint and apply the `LocalizeViewPaths` middleware before handling the component update.
 
 Learn more about [customizing the update route on the Installation page](https://livewire.laravel.com/docs/installation#configuring-livewires-update-endpoint).
 
 ## Snapshot checksums
 
-Between every Livewire request, a snapshot is taken of the Livewire component and sent to the brower. This snapshot is used to re-build the component during the next server round-trip.
+Between every Livewire request, a snapshot is taken of the Livewire component and sent to the browser. This snapshot is used to re-build the component during the next server round-trip.
 
 [Learn more about Livewire snapshots in the Hydration documentation.](https://livewire.laravel.com/docs/hydration#the-snapshot)
 

@@ -1,16 +1,16 @@
 <?php
 
-namespace Livewire\Features\SupportLegacyModels\Tests;
+namespace Livewire\Drawer\Tests;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Route;
 use Livewire\Component;
 use Livewire\Livewire;
+use Sushi\Sushi;
 
-class ComponentTypedPropertyBindingsUnitTest extends \Tests\TestCase
+class ImplicitRouteBindingUnitTest extends \Tests\TestCase
 {
-    use Concerns\EnableLegacyModels;
-
     /** @test */
     public function props_are_set_via_mount()
     {
@@ -52,6 +52,33 @@ class ComponentTypedPropertyBindingsUnitTest extends \Tests\TestCase
         // the result will *not* resolve via the relationship (it's super edge-case and makes everything terrible)
         $this->withoutExceptionHandling()->get('/foo/parent-model/child/child-model')->assertSeeText('via-route:parent-model:via-route:child-model');
     }
+
+    /** @test */
+    public function props_are_set_via_implicit_binding_when_with_trashed()
+    {
+        Route::get('/foo/{model}', ComponentWithTrashedPropBindings::class);
+
+        $this->get('/foo/route-model')
+            ->assertNotFound();
+
+        Route::get('/foo/with-trashed/{model}', ComponentWithTrashedPropBindings::class)->withTrashed();
+
+        $this->withoutExceptionHandling()
+            ->get('/foo/with-trashed/route-model')
+            ->assertSeeText('prop:via-route:trashed:route-model');
+    }
+
+    /** @test */
+    public function props_are_set_via_implicit_binding_after_404()
+    {
+        Route::get('/foo/{user}', ComponentWithModelPropBindings::class);
+
+        $this->get('/foo/404')
+            ->assertNotFound();
+
+        $this->get('/foo/1')
+            ->assertSeeText('prop:John');
+    }
 }
 
 class PropBoundModel extends Model
@@ -65,13 +92,14 @@ class PropBoundModel extends Model
 
     public function resolveRouteBinding($value, $field = null)
     {
-        $this->value = "via-route:$value";
+        $this->value = "via-route:{$value}";
+
         return $this;
     }
 
     public function resolveChildRouteBinding($childType, $value, $field)
     {
-        return new static("via-parent:$value");
+        return new static("via-parent:{$value}");
     }
 }
 
@@ -144,4 +172,77 @@ class ComponentWithDependentMountBindings extends Component
 
         return app('view')->make('show-name-with-this');
     }
+}
+
+class PropBoundModelWithSoftDelete extends Model
+{
+    use SoftDeletes;
+
+    public $value;
+
+    public function __construct($value = 'model-default')
+    {
+        $this->value = $value;
+    }
+
+    public function resolveRouteBinding($value, $field = null)
+    {
+        return null;
+    }
+
+    public function resolveSoftDeletableRouteBinding($value, $field = null)
+    {
+        $this->value = "via-route:trashed:{$value}";
+
+        return $this;
+    }
+}
+
+class ComponentWithTrashedPropBindings extends Component
+{
+    public PropBoundModelWithSoftDelete $model;
+
+    public $name;
+
+    public function render()
+    {
+        $this->name = 'prop:'.$this->model->value;
+
+        return app('view')->make('show-name-with-this');
+    }
+}
+
+
+class ComponentWithModelPropBindings extends Component
+{
+    public User $user;
+
+    public function mount(User $user)
+    {
+        $this->user = $user;
+    }
+
+    public function render()
+    {
+        $this->name = 'prop:'.$this->user->name;
+
+        return app('view')->make('show-name-with-this');
+    }
+}
+
+class User extends Model
+{
+    use Sushi;
+
+    protected array $schema = [
+        'id' => 'integer',
+        'name' => 'string',
+    ];
+
+    protected array $rows = [
+        [
+            'id' => 1,
+            'name' => 'John',
+        ],
+    ];
 }

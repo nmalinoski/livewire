@@ -188,6 +188,7 @@ In addition to primitive types, Livewire supports common PHP object types used i
 Supported PHP types:
 | Type | Full Class Name |
 |------|-----------------|
+| BackedEnum | `BackedEnum` |
 | Collection | `Illuminate\Support\Collection` |
 | Eloquent Collection | `Illuminate\Database\Eloquent\Collection` |
 | Model | `Illuminate\Database\Model` |
@@ -542,7 +543,7 @@ For example, suppose you have a Livewire component that defines a public propert
     "type": "model",
     "class": "App\Models\Post",
     "key": 1,
-    "relationships": [].
+    "relationships": []
 }
 ```
 
@@ -577,7 +578,7 @@ Now, when the Eloquent model is "dehydrated" (serialized), the original class na
     "class": "App\Models\Post", // [tl! remove]
     "class": "post", // [tl! add]
     "key": 1,
-    "relationships": [].
+    "relationships": []
 }
 ```
 
@@ -699,7 +700,7 @@ class ShowTodos extends Component
 }
 ```
 
-You might wonder, why not just call `$this->todos()` as a method directly where you need to? Why use `#[Computed]` in the first place?
+You might wonder why not just call `$this->todos()` as a method directly where you need to? Why use `#[Computed]` in the first place?
 
 The reason is that computed properties have a performance advantage, since they are automatically cached after their first usage during a single request. This means you can freely access `$this->todos` within your component and be assured that the actual method will only be called once, so that you don't run an expensive query multiple times in the same request.
 

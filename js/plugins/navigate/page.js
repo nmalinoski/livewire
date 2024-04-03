@@ -1,7 +1,8 @@
 let oldBodyScriptTagHashes = []
 
 let attributesExemptFromScriptTagHashing = [
-    'data-csrf'
+    'data-csrf',
+    'aria-hidden',
 ]
 
 export function swapCurrentPageWithNewHtml(html, andThen) {
@@ -13,40 +14,21 @@ export function swapCurrentPageWithNewHtml(html, andThen) {
         return simpleHash(ignoreAttributes(i.outerHTML, attributesExemptFromScriptTagHashing))
     }))
 
-    mergeNewHead(newHead)
+    let afterRemoteScriptsHaveLoaded = () => {}
+
+    mergeNewHead(newHead).finally(() => {
+        afterRemoteScriptsHaveLoaded()
+    })
 
     prepNewBodyScriptTagsToRun(newBody, oldBodyScriptTagHashes)
 
-    transitionOut(document.body)
+    let oldBody = document.body
 
-    // @todo: only setTimeout when applying transitions
-    // setTimeout(() => {
-        let oldBody = document.body
+    document.body.replaceWith(newBody)
 
-        document.body.replaceWith(newBody)
+    Alpine.destroyTree(oldBody)
 
-        Alpine.destroyTree(oldBody)
-
-        transitionIn(newBody)
-
-        andThen()
-    // }, 0)
-}
-
-function transitionOut(body) {
-    return;
-    body.style.transition = 'all .5s ease'
-    body.style.opacity = '0'
-}
-
-function transitionIn(body) {
-    return;
-    body.style.opacity = '0'
-    body.style.transition = 'all .5s ease'
-
-    requestAnimationFrame(() => {
-        body.style.opacity = '1'
-    })
+    andThen(i => afterRemoteScriptsHaveLoaded = i)
 }
 
 function prepNewBodyScriptTagsToRun(newBody, oldBodyScriptTagHashes) {
@@ -77,6 +59,8 @@ function mergeNewHead(newHead) {
 
     let touchedHeadElements = []
 
+    let remoteScriptsPromises = []
+
     for (let child of Array.from(newHead.children)) {
         if (isAsset(child)) {
             if (! headChildrenHtmlLookup.includes(child.outerHTML)) {
@@ -87,7 +71,18 @@ function mergeNewHead(newHead) {
                 }
 
                 if (isScript(child)) {
-                    document.head.appendChild(cloneScriptTag(child))
+                    try {
+                        remoteScriptsPromises.push(
+                            injectScriptTagAndWaitForItToFullyLoad(
+                                cloneScriptTag(child)
+                            )
+                        )
+                    } catch (error) {
+                        // Let's eat any promise rejects so that we don't
+                        // break the rest of the Alpine intializing...
+                        // Any errors triggered by adding the script tag to the page
+                        // will still be thrown...
+                    }
                 } else {
                     document.head.appendChild(child)
                 }
@@ -120,6 +115,23 @@ function mergeNewHead(newHead) {
     for (let child of Array.from(newHead.children)) {
         document.head.appendChild(child)
     }
+
+    return Promise.all(remoteScriptsPromises)
+}
+
+async function injectScriptTagAndWaitForItToFullyLoad(script) {
+    return new Promise((resolve, reject) => {
+        // Script assets need to be loaded synchronously so that scripts have
+        // their global variables available...
+        if (script.src) {
+            script.onload = () => resolve()
+            script.onerror = () => reject()
+        } else {
+            resolve()
+        }
+
+        document.head.appendChild(script)
+    })
 }
 
 function cloneScriptTag(el) {
@@ -186,6 +198,9 @@ function ignoreAttributes(subject, attributesToRemove) {
 
         result = result.replace(regex, '')
     })
+
+    // Remove all whitespace to make things less flaky...
+    result = result.replaceAll(' ', '')
 
     return result.trim()
 }

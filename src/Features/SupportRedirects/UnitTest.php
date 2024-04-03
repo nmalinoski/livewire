@@ -34,6 +34,20 @@ class UnitTest extends \Tests\TestCase
     }
 
     /** @test */
+    public function intended_redirect()
+    {
+        $this->registerNamedRoute();
+
+        $component = Livewire::test(TriggersRedirectStub::class);
+
+        session()->put('url.intended', route('foo'));
+
+        $component->runAction('triggerRedirectIntended');
+
+        $this->assertEquals(route('foo'), $component->effects['redirect']);
+    }
+
+    /** @test */
     public function action_redirect()
     {
         $this->registerAction();
@@ -172,6 +186,49 @@ class UnitTest extends \Tests\TestCase
         $this->assertNull($component->effects['html'] ?? null);
     }
 
+    /** @test */
+    public function flash_data_is_available_after_render()
+    {
+        session()->flash('foo', 'bar');
+        $this->assertEquals('bar', session()->get('foo'));
+
+        Livewire::test(RenderOnRedirectWithSkipRenderMethod::class);
+
+        $this->assertEquals('bar', session()->get('foo'));
+    }
+
+    /** @test */
+    public function flash_data_is_unavailable_after_subsequent_requests()
+    {
+        session()->flash('foo', 'bar');
+        $this->assertEquals('bar', session()->get('foo'));
+
+        $component = Livewire::test(RenderOnRedirectWithSkipRenderMethod::class);
+
+        $this->assertEquals('bar', session()->get('foo'));
+
+        $component->call('$refresh');
+
+        $this->assertNull(session()->get('foo'));
+    }
+
+    /** @test */
+    public function flash_data_is_available_after_render_of_multiple_components()
+    {
+        session()->flash('foo', 'bar');
+        $this->assertEquals('bar', session()->get('foo'));
+
+        $component1 = Livewire::test(RenderOnRedirectWithSkipRenderMethod::class);
+
+        $component2 = Livewire::test(RenderOnRedirectWithSkipRenderMethod::class);
+
+        $this->assertEquals('bar', session()->get('foo'));
+
+        $component1->call('$refresh');
+
+        $this->assertNull(session()->get('foo'));
+    }
+
     protected function registerNamedRoute()
     {
         Route::get('foo', function () {
@@ -195,6 +252,11 @@ class TriggersRedirectStub extends Component
     public function triggerRedirectRoute()
     {
         return $this->redirectRoute('foo');
+    }
+
+    public function triggerRedirectIntended()
+    {
+        return $this->redirectIntended();
     }
 
     public function triggerRedirectAction()

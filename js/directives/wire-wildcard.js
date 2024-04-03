@@ -1,6 +1,5 @@
 import { callAndClearComponentDebounces } from '@/debounce'
-import { getDirectives } from '@/directives'
-import { on } from '@/events'
+import { on } from '@/hooks'
 import Alpine from 'alpinejs'
 
 on('directive.init', ({ el, directive, cleanup, component }) => {
@@ -26,6 +25,8 @@ on('directive.init', ({ el, directive, cleanup, component }) => {
             if (el.__livewire_confirm) {
                 el.__livewire_confirm(() => {
                     execute()
+                }, () => {
+                    e.stopImmediatePropagation()
                 })
             } else {
                 execute()
