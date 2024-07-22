@@ -28,7 +28,7 @@ class HandleRequests extends Mechanism
     function getUpdateUri()
     {
         return (string) str(
-            route($this->updateRoute->getName(), [], false)
+            parse_url(route($this->updateRoute->getName()), PHP_URL_PATH)
         )->start('/');
     }
 
